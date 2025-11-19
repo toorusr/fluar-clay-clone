@@ -1,28 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    Search,
-    Filter,
-    LayoutTemplate,
     Download,
     Share2,
     Plus,
-    ChevronDown,
     Zap,
     Play,
     ArrowUpRight,
     Loader2,
     Command,
-    List,
-    Grid3X3,
     X,
     Check,
-    MoreHorizontal,
     Trash2,
     Sparkles,
     Settings,
     Globe,
     ExternalLink,
-    Key,
     MessageSquare,
     Send,
     Wand2,
@@ -34,7 +26,44 @@ const apiKey = "";
 
 // --- Mock Data & Config ---
 
-const INITIAL_COLUMNS = [
+// --- Interfaces ---
+
+interface Column {
+    id: string;
+    label: string;
+    w: number;
+    icon: string;
+    type: string;
+    prompt?: string;
+}
+
+interface Row {
+    id: number;
+    name: string;
+    company: string;
+    linkedin: string;
+    status: string;
+    [key: string]: any;
+}
+
+interface Source {
+    title: string;
+    uri: string;
+}
+
+interface CellValue {
+    value: string;
+    process?: string[];
+    sources?: Source[];
+}
+
+interface EnrichedDataStore {
+    [key: string]: CellValue;
+}
+
+// --- Mock Data & Config ---
+
+const INITIAL_COLUMNS: Column[] = [
     { id: 'name', label: "Name", w: 200, icon: "T", type: 'static' },
     { id: 'company', label: "Company", w: 160, icon: "T", type: 'static' },
     { id: 'linkedin', label: "Featured In", w: 160, icon: "U", type: 'static' },
@@ -44,7 +73,7 @@ const INITIAL_COLUMNS = [
     { id: 'product', label: "Core Product", w: 260, icon: "T", type: 'enrichable' },
 ];
 
-const INITIAL_DATA = [
+const INITIAL_DATA: Row[] = [
     { id: 1, name: "Max Brodeur-Ur...", company: "Gumloop", linkedin: "linkedin.com/in/max", status: "idle" },
     { id: 2, name: "Robert Chandler", company: "Mordenre", linkedin: "linkedin.com/in/rob", status: "idle" },
     { id: 3, name: "Matt Stankiewic...", company: "ElventLabs", linkedin: "linkedin.com/in/matt", status: "idle" },
@@ -68,7 +97,7 @@ const INITIAL_DATA = [
 ];
 
 // Mock Data with Metadata Structure
-const ENRICHED_DATA_MOCK = {
+const ENRICHED_DATA_MOCK: any = {
     1: { type: { value: "VC-backed" }, website: { value: "https://gumloop.com" }, customers: { value: "Not listed" }, product: { value: "AI automation platform" } },
     2: { type: { value: "VC-backed" }, website: { value: "https://mordenre.com" }, customers: { value: "Zendesk, Garmin, Mint" }, product: { value: "Marketing automation..." } },
     3: { type: { value: "VC-backed" }, website: { value: "https://elevenlabs.io" }, customers: { value: "Not listed" }, product: { value: "AI voice models and products." } },
@@ -76,7 +105,7 @@ const ENRICHED_DATA_MOCK = {
 
 // --- Helper Components ---
 
-const StatusBadge = ({ type }) => {
+const StatusBadge = ({ type }: { type: string }) => {
     if (!type) return null;
     let bg = "bg-slate-100 text-slate-600 border-slate-200";
     if (type === "VC-backed") bg = "bg-purple-50 text-purple-700 border-purple-200";
@@ -86,14 +115,14 @@ const StatusBadge = ({ type }) => {
     if (type === "Auth Error") bg = "bg-red-50 text-red-700 border-red-200";
 
     return (
-        <span className= {`text-[10px] font-semibold tracking-tight px-1.5 py-0.5 rounded-[3px] border ${bg}`
-}>
-    { type }
-    </span>
-  );
+        <span className={`text-[10px] font-semibold tracking-tight px-1.5 py-0.5 rounded-[3px] border ${bg}`
+        }>
+            {type}
+        </span>
+    );
 };
 
-const SourcePopover = ({ metadata, onClose }) => {
+const SourcePopover = ({ metadata, onClose }: { metadata: CellValue, onClose: (e: React.MouseEvent) => void }) => {
     if (!metadata) return null;
 
     const processSteps = metadata.process || [
@@ -106,64 +135,85 @@ const SourcePopover = ({ metadata, onClose }) => {
     const sources = metadata.sources || [];
 
     return (
-        <div 
-      onClick= {(e) => e.stopPropagation()}
-className = "absolute top-[calc(100%+4px)] left-0 w-[300px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 animate-in fade-in slide-in-from-top-2 duration-200 flex flex-col overflow-hidden"
-    >
-    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between" >
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700" >
-            <Zap className="w-3 h-3 text-indigo-600 fill-indigo-100" />
-                Process
+        <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-[calc(100%+4px)] left-0 w-[300px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 animate-in fade-in slide-in-from-top-2 duration-200 flex flex-col overflow-hidden"
+        >
+            <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between" >
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700" >
+                    <Zap className="w-3 h-3 text-indigo-600 fill-indigo-100" />
+                    Process
                 </div>
-                < button onClick = { onClose } className = "text-slate-400 hover:text-slate-600" > <X className="w-3.5 h-3.5" /> </button>
-                    </div>
+                < button onClick={onClose} className="text-slate-400 hover:text-slate-600" > <X className="w-3.5 h-3.5" /> </button>
+            </div>
 
-                    < div className = "p-3 max-h-[200px] overflow-y-auto" >
-                        <div className="relative border-l-2 border-slate-100 ml-1.5 space-y-4 pb-1" >
-                        {
-                            processSteps.map((step, i) => (
-                                <div key= { i } className = "relative pl-4" >
+            < div className="p-3 max-h-[200px] overflow-y-auto" >
+                <div className="relative border-l-2 border-slate-100 ml-1.5 space-y-4 pb-1" >
+                    {
+                        processSteps.map((step, i) => (
+                            <div key={i} className="relative pl-4" >
                                 <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white bg-slate-300 shadow-sm" > </div>
-                            < p className = "text-xs text-slate-600 leading-relaxed" > { step } </p>
+                                < p className="text-xs text-slate-600 leading-relaxed" > {step} </p>
                             </div>
-                            ))
-                        }
-                            < div className = "relative pl-4" >
-                                <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white bg-indigo-500 shadow-sm" > </div>
-                                    < p className = "text-xs font-medium text-indigo-700" > Final Answer Extracted </p>
-                                        </div>
-                                        </div>
-                                        </div>
+                        ))
+                    }
+                    < div className="relative pl-4" >
+                        <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white bg-indigo-500 shadow-sm" > </div>
+                        < p className="text-xs font-medium text-indigo-700" > Final Answer Extracted </p>
+                    </div>
+                </div>
+            </div>
 
-{
-    sources.length > 0 && (
-        <div className="bg-slate-50 px-3 py-2.5 border-t border-slate-100" >
-            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2" > Sources </div>
-                < div className = "flex flex-wrap gap-2" >
-                {
-                    sources.map((source, i) => (
-                        <a 
-                key= { i } 
-                href = { source.uri } 
-                target = "_blank" 
-                rel = "noreferrer"
-                className = "flex items-center gap-1.5 bg-white border border-slate-200 rounded-md pl-1.5 pr-2 py-1 hover:border-indigo-300 hover:shadow-sm transition-all group max-w-full"
-                        >
-                        <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center text-[8px] font-bold text-slate-500" >
-                        { source.title ? source.title[0] : <Globe className="w-2.5 h-2.5" /> }
+            {
+                sources.length > 0 && (
+                    <div className="bg-slate-50 px-3 py-2.5 border-t border-slate-100" >
+                        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2" > Sources </div>
+                        < div className="flex flex-wrap gap-2" >
+                            {
+                                sources.map((source, i) => (
+                                    <a
+                                        key={i}
+                                        href={source.uri}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-md pl-1.5 pr-2 py-1 hover:border-indigo-300 hover:shadow-sm transition-all group max-w-full"
+                                    >
+                                        <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center text-[8px] font-bold text-slate-500" >
+                                            {source.title ? source.title[0] : <Globe className="w-2.5 h-2.5" />}
+                                        </div>
+                                        < span className="text-xs text-slate-600 truncate max-w-[100px] group-hover:text-indigo-600" > {source.title || "Web Source"} </span>
+                                        < ExternalLink className="w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100" />
+                                    </a>
+                                ))
+                            }
                         </div>
-                    < span className = "text-xs text-slate-600 truncate max-w-[100px] group-hover:text-indigo-600" > { source.title || "Web Source" } </span>
-                    < ExternalLink className = "w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100" />
-                    </a>
-                    ))
-                }
                     </div>
-                    </div>
-      )
-}
-</div>
-  );
+                )
+            }
+        </div>
+    );
 };
+
+interface DataCellProps {
+    rowId: number;
+    colId: string;
+    children: React.ReactNode;
+    width: number;
+    isSelected: boolean;
+    isSelectionTop: boolean;
+    isSelectionBottom: boolean;
+    isSelectionLeft: boolean;
+    isSelectionRight: boolean;
+    isFillTarget: boolean;
+    isLoading: boolean;
+    onMouseDown: (rowId: number, colId: string, e: React.MouseEvent) => void;
+    onMouseEnter: (rowId: number, colId: string) => void;
+    onDoubleClick: (rowId: number, colId: string) => void;
+    onHandleMouseDown: (rowId: number, colId: string, e: React.MouseEvent) => void;
+    isEditing: boolean;
+    onEdit: (value: string) => void;
+    valueObj: CellValue;
+}
 
 const DataCell = ({
     rowId,
@@ -184,7 +234,7 @@ const DataCell = ({
     isEditing,
     onEdit,
     valueObj
-}) => {
+}: DataCellProps) => {
     const [editValue, setEditValue] = useState(valueObj?.value || "");
     const [showSourcePopover, setShowSourcePopover] = useState(false);
 
@@ -196,7 +246,7 @@ const DataCell = ({
         if (!isSelected) setShowSourcePopover(false);
     }, [isSelected]);
 
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
             onEdit(editValue);
         }
@@ -205,239 +255,239 @@ const DataCell = ({
     const hasMetadata = valueObj && (valueObj.process || valueObj.sources);
 
     return (
-        <div 
-      onMouseDown= {(e) => onMouseDown(rowId, colId, e)}
-onMouseEnter = {() => onMouseEnter(rowId, colId)}
-onDoubleClick = {() => onDoubleClick(rowId, colId)}
-style = {{ width: width }}
-className = {`
+        <div
+            onMouseDown={(e) => onMouseDown(rowId, colId, e)}
+            onMouseEnter={() => onMouseEnter(rowId, colId)}
+            onDoubleClick={() => onDoubleClick(rowId, colId)}
+            style={{ width: width }}
+            className={`
         relative h-[36px] border-r border-b border-slate-200/60 cursor-default select-none transition-colors duration-75 group
         ${isSelected ? 'bg-indigo-50/20' : 'bg-white hover:bg-slate-50'}
         ${isFillTarget ? 'bg-indigo-50/40' : ''} 
       `}
-    >
-    <div className="w-full h-full px-3 py-2 flex items-center overflow-hidden text-ellipsis whitespace-nowrap text-[13px]" >
-        {
-            isLoading?(
-            <div className = "flex items-center text-slate-400 gap-2" >
-                    <Loader2 className="w-3 h-3 animate-spin" />
-        <span className="italic text-xs font-medium" > Generating...</span>
+        >
+            <div className="w-full h-full px-3 py-2 flex items-center overflow-hidden text-ellipsis whitespace-nowrap text-[13px]" >
+                {
+                    isLoading ? (
+                        <div className="flex items-center text-slate-400 gap-2" >
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span className="italic text-xs font-medium" > Generating...</span>
+                        </div>
+                    ) : isEditing ? (
+                        <input
+                            autoFocus
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={() => onEdit(editValue)}
+                            onKeyDown={handleKeyDown}
+                            className="w-full h-full bg-white outline-none text-slate-900 p-0 m-0 border-none"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    ) : children}
             </div>
-          ) : isEditing ? (
-    <input 
-               autoFocus
-               value = { editValue }
-onChange = {(e) => setEditValue(e.target.value)}
-onBlur = {() => onEdit(editValue)}
-onKeyDown = { handleKeyDown }
-className = "w-full h-full bg-white outline-none text-slate-900 p-0 m-0 border-none"
-onClick = {(e) => e.stopPropagation()}
-             />
-          ) : children}
-</div>
 
-{
-    !isLoading && !isEditing && hasMetadata && isSelected && (
-        <div className="absolute right-1 bottom-1 z-30" >
-            <button 
-                onClick={ (e) => { e.stopPropagation(); setShowSourcePopover(!showSourcePopover); } }
-    className = {`p-0.5 rounded-full transition-all ${showSourcePopover ? 'bg-indigo-100 text-indigo-600' : 'text-slate-300 hover:text-indigo-500 hover:bg-indigo-50'}`
-}
-             >
-    <Sparkles className="w-3 h-3 fill-current" />
-        </button>
-{
-    showSourcePopover && (
-        <SourcePopover metadata={ valueObj } onClose = {(e) => { e.stopPropagation(); setShowSourcePopover(false); }
-} />
-             )}
-</div>
-      )}
+            {
+                !isLoading && !isEditing && hasMetadata && isSelected && (
+                    <div className="absolute right-1 bottom-1 z-30" >
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setShowSourcePopover(!showSourcePopover); }}
+                            className={`p-0.5 rounded-full transition-all ${showSourcePopover ? 'bg-indigo-100 text-indigo-600' : 'text-slate-300 hover:text-indigo-500 hover:bg-indigo-50'}`
+                            }
+                        >
+                            <Sparkles className="w-3 h-3 fill-current" />
+                        </button>
+                        {
+                            showSourcePopover && (
+                                <SourcePopover metadata={valueObj} onClose={(e) => { e.stopPropagation(); setShowSourcePopover(false); }
+                                } />
+                            )}
+                    </div>
+                )}
 
-{
-    isSelected && !isEditing && (
-        <>
-        { isSelectionTop && <div className="absolute top-[-1px] left-[-1px] right-[-1px] h-[2px] bg-indigo-600 z-20 pointer-events-none" />}
-{ isSelectionBottom && <div className="absolute bottom-[-1px] left-[-1px] right-[-1px] h-[2px] bg-indigo-600 z-20 pointer-events-none" />}
-{ isSelectionLeft && <div className="absolute top-[-1px] bottom-[-1px] left-[-1px] w-[2px] bg-indigo-600 z-20 pointer-events-none" />}
-{ isSelectionRight && <div className="absolute top-[-1px] bottom-[-1px] right-[-1px] w-[2px] bg-indigo-600 z-20 pointer-events-none" />}
-{
-    isSelectionBottom && isSelectionRight && (
-        <div 
-                  onMouseDown={ (e) => { e.stopPropagation(); onHandleMouseDown(rowId, colId, e); } }
-    className = "absolute -bottom-[3px] -right-[3px] w-[7px] h-[7px] bg-indigo-600 z-30 border border-white shadow-sm cursor-crosshair square hover:scale-125 transition-transform"
-        > </div>
-            )
-}
-</>
-      )}
+            {
+                isSelected && !isEditing && (
+                    <>
+                        {isSelectionTop && <div className="absolute top-[-1px] left-[-1px] right-[-1px] h-[2px] bg-indigo-600 z-20 pointer-events-none" />}
+                        {isSelectionBottom && <div className="absolute bottom-[-1px] left-[-1px] right-[-1px] h-[2px] bg-indigo-600 z-20 pointer-events-none" />}
+                        {isSelectionLeft && <div className="absolute top-[-1px] bottom-[-1px] left-[-1px] w-[2px] bg-indigo-600 z-20 pointer-events-none" />}
+                        {isSelectionRight && <div className="absolute top-[-1px] bottom-[-1px] right-[-1px] w-[2px] bg-indigo-600 z-20 pointer-events-none" />}
+                        {
+                            isSelectionBottom && isSelectionRight && (
+                                <div
+                                    onMouseDown={(e) => { e.stopPropagation(); onHandleMouseDown(rowId, colId, e); }}
+                                    className="absolute -bottom-[3px] -right-[3px] w-[7px] h-[7px] bg-indigo-600 z-30 border border-white shadow-sm cursor-crosshair square hover:scale-125 transition-transform"
+                                > </div>
+                            )
+                        }
+                    </>
+                )}
 
-{
-    isFillTarget && (
-        <div className="absolute inset-0 border border-dashed border-indigo-400 z-10 pointer-events-none" > </div>
-      )
-}
-</div>
-  );
+            {
+                isFillTarget && (
+                    <div className="absolute inset-0 border border-dashed border-indigo-400 z-10 pointer-events-none" > </div>
+                )
+            }
+        </div>
+    );
 };
 
-const ToolbarButton = ({ children, icon: Icon, isActive = false, onClick }) => (
-    <button 
-    onClick= { onClick }
-className = {`
+const ToolbarButton = ({ children, icon: Icon, isActive = false, onClick }: { children: React.ReactNode, icon?: React.ElementType, isActive?: boolean, onClick?: () => void }) => (
+    <button
+        onClick={onClick}
+        className={`
       flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-[4px] transition-all border
       ${isActive
-        ? 'bg-slate-100 text-slate-900 border-slate-300 shadow-sm'
-        : 'bg-white text-slate-600 border-transparent hover:bg-slate-50 hover:border-slate-200'}
+                ? 'bg-slate-100 text-slate-900 border-slate-300 shadow-sm'
+                : 'bg-white text-slate-600 border-transparent hover:bg-slate-50 hover:border-slate-200'}
     `}
-  >
-    { Icon && <Icon className="w-3.5 h-3.5 opacity-70" />}
-{ children }
-</button>
+    >
+        {Icon && <Icon className="w-3.5 h-3.5 opacity-70" />}
+        {children}
+    </button>
 );
 
 // --- Column Settings Popover ---
 
-const ColumnSettingsPopover = ({ onClose, onSave, initialName = "", initialPrompt = "", mode = "create" }) => {
+const ColumnSettingsPopover = ({ onClose, onSave, initialName = "", initialPrompt = "", mode = "create" }: { onClose: (e: React.MouseEvent) => void, onSave: (name: string, prompt: string) => void, initialName?: string, initialPrompt?: string, mode?: "create" | "edit" }) => {
     const [name, setName] = useState(initialName);
     const [prompt, setPrompt] = useState(initialPrompt);
 
     return (
-        <div 
-        onClick= {(e) => e.stopPropagation()}
-className = "absolute top-12 right-4 w-[320px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95 duration-200"
-    >
-    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100" >
-        <div className="flex items-center gap-2" >
-            <div className={ `p-1 rounded-md ${mode === 'create' ? 'bg-indigo-100' : 'bg-slate-100'}` }>
-                { mode === 'create' ? <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> : <Settings className="w-3.5 h-3.5 text-slate-600" />}
-</div>
-    < span className = "text-sm font-semibold text-slate-800" > { mode === 'create' ? "New AI Column" : "Column Settings"}</span>
-        </div>
-        < button onClick = { onClose } className = "text-slate-400 hover:text-slate-600" >
-            <X className="w-4 h-4" />
-                </button>
+        <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-12 right-4 w-[320px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95 duration-200"
+        >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100" >
+                <div className="flex items-center gap-2" >
+                    <div className={`p-1 rounded-md ${mode === 'create' ? 'bg-indigo-100' : 'bg-slate-100'}`}>
+                        {mode === 'create' ? <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> : <Settings className="w-3.5 h-3.5 text-slate-600" />}
+                    </div>
+                    < span className="text-sm font-semibold text-slate-800" > {mode === 'create' ? "New AI Column" : "Column Settings"}</span>
                 </div>
-                < div className = "p-4 space-y-4" >
-                    <div className="space-y-1.5" >
-                        <label className="text-xs font-medium text-slate-500 uppercase tracking-wider" > Column Name </label>
-                            < input
-value = { name }
-onChange = {(e) => setName(e.target.value)}
-placeholder = "e.g. Summary, Sentiment"
-className = "w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-autoFocus
-    />
-    </div>
-    < div className = "space-y-1.5" >
-        <div className="flex items-center justify-between" >
-            <label className="text-xs font-medium text-slate-500 uppercase tracking-wider" > Prompt </label>
-                < span className = "text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium" > Gemini Flash </span>
+                < button onClick={onClose} className="text-slate-400 hover:text-slate-600" >
+                    <X className="w-4 h-4" />
+                </button>
+            </div>
+            < div className="p-4 space-y-4" >
+                <div className="space-y-1.5" >
+                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wider" > Column Name </label>
+                    < input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. Summary, Sentiment"
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        autoFocus
+                    />
+                </div>
+                < div className="space-y-1.5" >
+                    <div className="flex items-center justify-between" >
+                        <label className="text-xs font-medium text-slate-500 uppercase tracking-wider" > Prompt </label>
+                        < span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium" > Gemini Flash </span>
                     </div>
                     < textarea
-value = { prompt }
-onChange = {(e) => setPrompt(e.target.value)}
-placeholder = "Find the CEO of the company..."
-rows = { 4}
-className = "w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none"
-    />
-    </div>
-    < button
-onClick = {() => onSave(name, prompt)}
-disabled = {!name || !prompt}
-className = {`w-full flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all shadow-sm
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="Find the CEO of the company..."
+                        rows={4}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none"
+                    />
+                </div>
+                < button
+                    onClick={() => onSave(name, prompt)}
+                    disabled={!name || !prompt}
+                    className={`w-full flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all shadow-sm
             ${name && prompt
-        ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow'
-        : 'bg-slate-100 text-slate-400 cursor-not-allowed'}
+                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow'
+                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'}
           `}
-        >
-    { mode === 'create' ? <Zap className="w-3.5 h-3.5 fill-current" /> : <Check className="w-3.5 h-3.5" />}
-{ mode === 'create' ? "Create Column" : "Save Changes" }
-</button>
-    </div>
-    </div>
-  );
+                >
+                    {mode === 'create' ? <Zap className="w-3.5 h-3.5 fill-current" /> : <Check className="w-3.5 h-3.5" />}
+                    {mode === 'create' ? "Create Column" : "Save Changes"}
+                </button>
+            </div>
+        </div>
+    );
 };
 
-const SmartEditPopover = ({ onClose, onRun }) => {
+const SmartEditPopover = ({ onClose, onRun }: { onClose: (e: React.MouseEvent) => void, onRun: (prompt: string) => void }) => {
     const [prompt, setPrompt] = useState("");
 
     return (
-        <div 
-        onClick= {(e) => e.stopPropagation()}
-className = "absolute bottom-14 left-1/2 -translate-x-1/2 w-[300px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 animate-in slide-in-from-bottom-2 duration-200"
-    >
-    <div className="p-3" >
-        <div className="flex items-center gap-2 mb-2 text-xs font-medium text-slate-500 uppercase tracking-wider" >
-            <Wand2 className="w-3.5 h-3.5 text-indigo-500" /> Smart Edit
+        <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-14 left-1/2 -translate-x-1/2 w-[300px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 animate-in slide-in-from-bottom-2 duration-200"
+        >
+            <div className="p-3" >
+                <div className="flex items-center gap-2 mb-2 text-xs font-medium text-slate-500 uppercase tracking-wider" >
+                    <Wand2 className="w-3.5 h-3.5 text-indigo-500" /> Smart Edit
                 </div>
                 < input
-value = { prompt }
-onChange = {(e) => setPrompt(e.target.value)}
-placeholder = "e.g. Fix formatting, Translate to Spanish..."
-className = "w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 mb-2"
-autoFocus
-onKeyDown = {(e) => {
-    if (e.key === 'Enter' && prompt) onRun(prompt);
-}}
-        />
-    < div className = "flex justify-end gap-2" >
-        <button onClick={ onClose } className = "px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" > Cancel </button>
-            < button
-onClick = {() => onRun(prompt)}
-disabled = {!prompt}
-className = {`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1.5
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="e.g. Fix formatting, Translate to Spanish..."
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 mb-2"
+                    autoFocus
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && prompt) onRun(prompt);
+                    }}
+                />
+                < div className="flex justify-end gap-2" >
+                    <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700" > Cancel </button>
+                    < button
+                        onClick={() => onRun(prompt)}
+                        disabled={!prompt}
+                        className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1.5
                    ${prompt ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-400'}
                 `}
-            >
-    Run < ArrowUpRight className = "w-3 h-3" />
-        </button>
+                    >
+                        Run < ArrowUpRight className="w-3 h-3" />
+                    </button>
+                </div>
+            </div>
         </div>
-        </div>
-        </div>
-  );
+    );
 };
 
 // --- API Key Modal ---
 
-const APIKeyModal = ({ onClose, onSave, currentKey }) => {
+const APIKeyModal = ({ onClose, onSave, currentKey }: { onClose: () => void, onSave: (key: string) => void, currentKey: string }) => {
     const [key, setKey] = useState(currentKey || "");
     return (
-        <div className= "absolute inset-0 bg-black/20 backdrop-blur-sm z-[100] flex items-center justify-center" onClick = { onClose } >
-            <div className="bg-white rounded-lg shadow-2xl w-[400px] p-6" onClick = { e => e.stopPropagation()}>
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-[100] flex items-center justify-center" onClick={onClose} >
+            <div className="bg-white rounded-lg shadow-2xl w-[400px] p-6" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4" >
                     <h2 className="text-lg font-semibold text-slate-900" > Connect API </h2>
-                        < button onClick = { onClose } className = "text-slate-400 hover:text-slate-600" > <X className="w-5 h-5" /> </button>
-                            </div>
-                            < p className = "text-sm text-slate-500 mb-4" >
-                                Enter your Gemini API key to enable AI features.This key is stored locally in your browser.
+                    < button onClick={onClose} className="text-slate-400 hover:text-slate-600" > <X className="w-5 h-5" /> </button>
+                </div>
+                < p className="text-sm text-slate-500 mb-4" >
+                    Enter your Gemini API key to enable AI features.This key is stored locally in your browser.
                 </p>
-                                    < input
-type = "password"
-placeholder = "Enter API Key (starts with AIza...)"
-className = "w-full border border-slate-300 rounded-md px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-value = { key }
-onChange = { e => setKey(e.target.value) }
-autoFocus
-    />
-    <button 
-                    onClick={ () => onSave(key) }
-className = "w-full bg-indigo-600 text-white py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
-    >
-    Save Key
-        </button>
-        </div>
+                < input
+                    type="password"
+                    placeholder="Enter API Key (starts with AIza...)"
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={key}
+                    onChange={e => setKey(e.target.value)}
+                    autoFocus
+                />
+                <button
+                    onClick={() => onSave(key)}
+                    className="w-full bg-indigo-600 text-white py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+                >
+                    Save Key
+                </button>
+            </div>
         </div>
     )
 }
 
 // --- Chat Sidebar ---
 
-const ChatSidebar = ({ isOpen, onClose, data, columns, getCellValueObj, apiKey }) => {
+const ChatSidebar = ({ isOpen, onClose, data, columns, getCellValueObj, apiKey }: { isOpen: boolean, onClose: () => void, data: Row[], columns: Column[], getCellValueObj: (rowId: number, colId: string) => CellValue, apiKey: string }) => {
     const [messages, setMessages] = useState([{ role: 'assistant', text: 'Hello! I can analyze your data. Ask me anything about the table.' }]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const scrollRef = useRef(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -454,7 +504,7 @@ const ChatSidebar = ({ isOpen, onClose, data, columns, getCellValueObj, apiKey }
         setIsLoading(true);
 
         const tableContext = data.slice(0, 20).map(row => {
-            const rowObj = {};
+            const rowObj: Record<string, any> = {};
             columns.forEach(col => {
                 const cellVal = getCellValueObj(row.id, col.id).value;
                 rowObj[col.label] = cellVal;
@@ -497,52 +547,52 @@ const ChatSidebar = ({ isOpen, onClose, data, columns, getCellValueObj, apiKey }
     if (!isOpen) return null;
 
     return (
-        <div className= "fixed right-0 top-0 bottom-0 w-[350px] bg-white shadow-2xl border-l border-slate-200 z-[100] flex flex-col animate-in slide-in-from-right duration-300" >
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50" >
-            <div className="flex items-center gap-2 font-semibold text-slate-800" >
-                <Bot className="w-5 h-5 text-indigo-600" /> Ask Data
-                    </div>
-                    < button onClick = { onClose } className = "text-slate-400 hover:text-slate-600" > <X className="w-4 h-4" /> </button>
+        <div className="fixed right-0 top-0 bottom-0 w-[350px] bg-white shadow-2xl border-l border-slate-200 z-[100] flex flex-col animate-in slide-in-from-right duration-300" >
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50" >
+                <div className="flex items-center gap-2 font-semibold text-slate-800" >
+                    <Bot className="w-5 h-5 text-indigo-600" /> Ask Data
+                </div>
+                < button onClick={onClose} className="text-slate-400 hover:text-slate-600" > <X className="w-4 h-4" /> </button>
+            </div>
+
+            < div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30" ref={scrollRef} >
+                {
+                    messages.map((msg, i) => (
+                        <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} >
+                            <div className={`max-w-[85%] p-3 rounded-lg text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700 shadow-sm'}`}>
+                                {msg.text}
+                            </div>
                         </div>
+                    ))}
+                {
+                    isLoading && (
+                        <div className="flex justify-start" >
+                            <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-sm" >
+                                <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                            </div>
+                        </div>
+                    )
+                }
+            </div>
 
-                        < div className = "flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30" ref = { scrollRef } >
-                        {
-                            messages.map((msg, i) => (
-                                <div key= { i } className = {`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} >
-                            <div className={ `max-w-[85%] p-3 rounded-lg text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700 shadow-sm'}` }>
-                                { msg.text }
-                                </div>
-                                </div>
-                ))}
-{
-    isLoading && (
-        <div className="flex justify-start" >
-            <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-sm" >
-                <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                    </div>
-                    </div>
-                )
-}
-</div>
-
-    < div className = "p-4 border-t border-slate-100 bg-white" >
-        <div className="relative" >
-            <input 
-                        value={ input }
-onChange = { e => setInput(e.target.value) }
-onKeyDown = { e => e.key === 'Enter' && handleSend() }
-placeholder = "Ask about your data..."
-className = "w-full pl-4 pr-10 py-2.5 border border-slate-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm"
-    />
-    <button 
-                        onClick={ handleSend }
-disabled = {!input.trim() || isLoading}
-className = "absolute right-1.5 top-1.5 p-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors"
-    >
-    <Send className="w-3.5 h-3.5" />
-        </button>
-        </div>
-        </div>
+            < div className="p-4 border-t border-slate-100 bg-white" >
+                <div className="relative" >
+                    <input
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSend()}
+                        placeholder="Ask about your data..."
+                        className="w-full pl-4 pr-10 py-2.5 border border-slate-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm"
+                    />
+                    <button
+                        onClick={handleSend}
+                        disabled={!input.trim() || isLoading}
+                        className="absolute right-1.5 top-1.5 p-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors"
+                    >
+                        <Send className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };
@@ -550,7 +600,7 @@ className = "absolute right-1.5 top-1.5 p-1.5 bg-indigo-600 text-white rounded-f
 
 export default function FluarPrototype() {
     // --- Columns State with LocalStorage ---
-    const [columns, setColumns] = useState(() => {
+    const [columns, setColumns] = useState<Column[]>(() => {
         try {
             const saved = localStorage.getItem('fluar_columns');
             return saved ? JSON.parse(saved) : INITIAL_COLUMNS;
@@ -567,36 +617,36 @@ export default function FluarPrototype() {
     });
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
-    const [data, setData] = useState(INITIAL_DATA);
+    const [data] = useState(INITIAL_DATA);
 
-    const [selectedRowIds, setSelectedRowIds] = useState(new Set());
-    const [selectedCells, setSelectedCells] = useState(new Set());
-    const [anchorCell, setAnchorCell] = useState(null);
+    const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
+    const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
+    const [anchorCell, setAnchorCell] = useState<{ rowId: number, colId: string } | null>(null);
 
     const [isDragging, setIsDragging] = useState(false);
     const [dragMode, setDragMode] = useState('replace');
-    const [selectionSnapshot, setSelectionSnapshot] = useState(new Set());
-    const [editingCell, setEditingCell] = useState(null);
+    const [selectionSnapshot, setSelectionSnapshot] = useState<Set<string>>(new Set());
+    const [editingCell, setEditingCell] = useState<{ rowId: number, colId: string } | null>(null);
 
     const [isFillDragging, setIsFillDragging] = useState(false);
-    const [fillStartCell, setFillStartCell] = useState(null);
-    const [fillTargetCells, setFillTargetCells] = useState(new Set());
+    const [fillStartCell, setFillStartCell] = useState<{ rowId: number, colId: string } | null>(null);
+    const [fillTargetCells, setFillTargetCells] = useState<Set<string>>(new Set());
 
     const [isAddColOpen, setIsAddColOpen] = useState(false);
-    const [editingColumnId, setEditingColumnId] = useState(null);
+    const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
 
-    const [processingCells, setProcessingCells] = useState(new Set());
+    const [processingCells, setProcessingCells] = useState<Set<string>>(new Set());
 
     // State for new features
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isSmartEditOpen, setIsSmartEditOpen] = useState(false);
 
     // --- Data Store with LocalStorage ---
-    const [enrichedDataStore, setEnrichedDataStore] = useState(() => {
+    const [enrichedDataStore, setEnrichedDataStore] = useState<EnrichedDataStore>(() => {
         try {
             const saved = localStorage.getItem('fluar_data');
             if (saved) return JSON.parse(saved);
-            const initial = {};
+            const initial: EnrichedDataStore = {};
             Object.keys(ENRICHED_DATA_MOCK).forEach(rowId => {
                 const rowData = ENRICHED_DATA_MOCK[rowId];
                 Object.keys(rowData).forEach(colId => {
@@ -609,7 +659,7 @@ export default function FluarPrototype() {
         }
     });
 
-    const [history, setHistory] = useState([]);
+    const [history, setHistory] = useState<EnrichedDataStore[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
 
     useEffect(() => {
@@ -629,9 +679,9 @@ export default function FluarPrototype() {
         localStorage.setItem('fluar_api_key', localApiKey);
     }, [localApiKey]);
 
-    const gridRef = useRef(null);
+    const gridRef = useRef<HTMLDivElement>(null);
 
-    const updateDataWithHistory = (newState) => {
+    const updateDataWithHistory = (newState: EnrichedDataStore) => {
         const newHistory = history.slice(0, historyIndex + 1);
         newHistory.push(newState);
         if (newHistory.length > 50) newHistory.shift();
@@ -656,20 +706,20 @@ export default function FluarPrototype() {
         }
     }, [history, historyIndex]);
 
-    const getRangeKeys = (start, end) => {
+    const getRangeKeys = (start: { rowId: number, colId: string }, end: { rowId: number, colId: string }) => {
         const startRowIdx = data.findIndex(d => d.id === start.rowId);
         const endRowIdx = data.findIndex(d => d.id === end.rowId);
         const startColIdx = columns.findIndex(c => c.id === start.colId);
         const endColIdx = columns.findIndex(c => c.id === end.colId);
 
-        if (startRowIdx === -1 || endRowIdx === -1) return new Set();
+        if (startRowIdx === -1 || endRowIdx === -1) return new Set<string>();
 
         const minRow = Math.min(startRowIdx, endRowIdx);
         const maxRow = Math.max(startRowIdx, endRowIdx);
         const minCol = Math.min(startColIdx, endColIdx);
         const maxCol = Math.max(startColIdx, endColIdx);
 
-        const keys = new Set();
+        const keys = new Set<string>();
         for (let r = minRow; r <= maxRow; r++) {
             for (let c = minCol; c <= maxCol; c++) {
                 keys.add(`${data[r].id}:${columns[c].id}`);
@@ -678,7 +728,7 @@ export default function FluarPrototype() {
         return keys;
     };
 
-    const getCellValueObj = useCallback((rowId, colId) => {
+    const getCellValueObj = useCallback((rowId: number, colId: string): CellValue => {
         const cellKey = `${rowId}:${colId}`;
         if (enrichedDataStore[cellKey] !== undefined) return enrichedDataStore[cellKey];
         const row = data.find(d => d.id === rowId);
@@ -686,8 +736,8 @@ export default function FluarPrototype() {
     }, [enrichedDataStore, data]);
 
     useEffect(() => {
-        const handleGlobalKeyDown = (e) => {
-            if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+        const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
 
             if ((e.key === 'Delete' || e.key === 'Backspace') && !editingCell) {
                 if (selectedCells.size > 0) {
@@ -715,7 +765,7 @@ export default function FluarPrototype() {
         return () => window.removeEventListener('keydown', handleGlobalKeyDown);
     }, [selectedCells, editingCell, enrichedDataStore, history, historyIndex, undo, redo]);
 
-    const toggleRowSelect = (id) => {
+    const toggleRowSelect = (id: number) => {
         const newSelected = new Set(selectedRowIds);
         if (newSelected.has(id)) newSelected.delete(id);
         else newSelected.add(id);
@@ -730,7 +780,7 @@ export default function FluarPrototype() {
         setSelectedCells(new Set());
     };
 
-    const handleCellMouseDown = (rowId, colId, e) => {
+    const handleCellMouseDown = (rowId: number, colId: string, e: React.MouseEvent) => {
         if (colId === 'checkbox' || colId === 'index') return;
         if (editingCell) return;
 
@@ -764,7 +814,7 @@ export default function FluarPrototype() {
         setSelectedRowIds(new Set());
     };
 
-    const handleCellMouseEnter = (rowId, colId) => {
+    const handleCellMouseEnter = (rowId: number, colId: string) => {
         if (isDragging && anchorCell && !isFillDragging) {
             const rangeKeys = getRangeKeys(anchorCell, { rowId, colId });
             if (dragMode === 'add') {
@@ -775,8 +825,8 @@ export default function FluarPrototype() {
             }
         }
         if (isFillDragging && fillStartCell) {
-            const rangeKeys = getRangeKeys(fillStartCell, { rowId, colId });
-            const targetOnly = new Set();
+            const rangeKeys: Set<string> = getRangeKeys(fillStartCell, { rowId, colId });
+            const targetOnly = new Set<string>();
             rangeKeys.forEach(k => {
                 if (!selectedCells.has(k)) targetOnly.add(k);
             });
@@ -784,7 +834,7 @@ export default function FluarPrototype() {
         }
     };
 
-    const handleFillHandleMouseDown = (rowId, colId, e) => {
+    const handleFillHandleMouseDown = (rowId: number, colId: string) => {
         setIsFillDragging(true);
         setFillStartCell({ rowId, colId });
         setFillTargetCells(new Set());
@@ -811,9 +861,9 @@ export default function FluarPrototype() {
                 if (!matchingSource && sourceCellsArr.length === 1) matchingSource = sourceCellsArr[0];
 
                 if (matchingSource) {
-                    const sourceCol = columns.find(c => c.id === matchingSource.colId);
-                    if (sourceCol.type === targetCol.type) {
-                        newStore[target.key] = JSON.parse(JSON.stringify(matchingSource.valObj));
+                    const sourceCol = columns.find(c => c.id === matchingSource!.colId);
+                    if (sourceCol && targetCol && sourceCol.type === targetCol.type) {
+                        newStore[target.key] = JSON.parse(JSON.stringify(matchingSource!.valObj));
                     }
                 }
             });
@@ -829,12 +879,12 @@ export default function FluarPrototype() {
     };
 
     useEffect(() => {
-        const handlePaste = async (e) => {
+        const handlePaste = async (e: ClipboardEvent) => {
             if (selectedCells.size === 0 || editingCell) return;
-            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+            if (['INPUT', 'TEXTAREA'].includes((document.activeElement as HTMLElement).tagName)) return;
 
             e.preventDefault();
-            const text = (e.clipboardData || window.clipboardData).getData('text');
+            const text = (e.clipboardData || (window as any).clipboardData).getData('text') as string;
 
             if (text !== undefined) {
                 const newState = { ...enrichedDataStore };
@@ -850,16 +900,16 @@ export default function FluarPrototype() {
     }, [selectedCells, editingCell, enrichedDataStore, history, historyIndex]);
 
     useEffect(() => {
-        const handleCopy = (e) => {
+        const handleCopy = (e: ClipboardEvent) => {
             if (selectedCells.size === 0 || editingCell) return;
-            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+            if (['INPUT', 'TEXTAREA'].includes((document.activeElement as HTMLElement).tagName)) return;
 
             const keysArray = Array.from(selectedCells);
             const activeKey = anchorCell ? `${anchorCell.rowId}:${anchorCell.colId}` : keysArray[0];
             const keyToCopy = selectedCells.has(activeKey) ? activeKey : keysArray[0];
             const [rid, cid] = keyToCopy.split(':');
             const valObj = getCellValueObj(parseInt(rid), cid);
-            e.clipboardData.setData('text/plain', valObj.value);
+            e.clipboardData?.setData('text/plain', valObj.value);
             e.preventDefault();
         };
 
@@ -873,8 +923,8 @@ export default function FluarPrototype() {
         return () => window.removeEventListener('mouseup', handleMouseUp);
     }, [isFillDragging, fillTargetCells, selectedCells, enrichedDataStore, history, historyIndex]);
 
-    const handleDoubleClick = (rowId, colId) => setEditingCell({ rowId, colId });
-    const handleCellEdit = (newValue) => {
+    const handleDoubleClick = (rowId: number, colId: string) => setEditingCell({ rowId, colId });
+    const handleCellEdit = (newValue: string) => {
         if (!editingCell) return;
         const { rowId, colId } = editingCell;
         const currentObj = getCellValueObj(rowId, colId);
@@ -882,16 +932,16 @@ export default function FluarPrototype() {
         updateDataWithHistory(newState);
         setEditingCell(null);
     };
-    const handleDeleteColumn = (colId) => {
+    const handleDeleteColumn = (colId: string) => {
         if (window.confirm("Delete column?")) setColumns(prev => prev.filter(c => c.id !== colId));
     };
-    const handleSaveApiKey = (key) => {
+    const handleSaveApiKey = (key: string) => {
         setLocalApiKey(key);
         setIsApiKeyModalOpen(false);
     };
 
     // --- Gemini API with Fallback ---
-    const runGeminiForCell = async (row, colDef, instruction = "") => {
+    const runGeminiForCell = async (row: Row, colDef: Column, instruction = "") => {
         const cellKey = `${row.id}:${colDef.id}`;
 
         // Use user's local key if available, otherwise the environment key
@@ -918,8 +968,8 @@ export default function FluarPrototype() {
             fullPrompt = `${contextString}\n\nTask: ${colDef.prompt}\n\nIMPORTANT: Use Google Search to find accurate info. \nOutput ONLY a JSON object with this structure:\n{ "answer": "The concise answer", "process": ["Step 1...", "Step 2..."] }`;
         }
 
-        const performRequest = async (useGrounding, useJson) => {
-            const payload = {
+        const performRequest = async (useGrounding: boolean, useJson: boolean) => {
+            const payload: any = {
                 contents: [{ parts: [{ text: fullPrompt }] }]
             };
 
@@ -982,7 +1032,7 @@ export default function FluarPrototype() {
                     sources: []
                 };
             } else {
-                let parsedResponse = { answer: "Error parsing", process: [] };
+                let parsedResponse: { answer: string, process: string[] } = { answer: "Error parsing", process: [] };
                 // Attempt to parse JSON from raw text even if mimetype wasn't enforced
                 // Often models output ```json ... ``` blocks in text mode
                 const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -995,7 +1045,7 @@ export default function FluarPrototype() {
                     parsedResponse.answer = text;
                 }
 
-                const sources = groundingMetadata?.groundingAttributions?.flatMap(attr =>
+                const sources = groundingMetadata?.groundingAttributions?.flatMap((attr: any) =>
                     attr.web ? [{ title: attr.web.title, uri: attr.web.uri }] : []
                 ) || [];
 
@@ -1020,7 +1070,7 @@ export default function FluarPrototype() {
         }
     };
 
-    const handleSmartEdit = (instruction) => {
+    const handleSmartEdit = (instruction: string) => {
         setIsSmartEditOpen(false);
         if (selectedCells.size === 0) return;
 
@@ -1033,20 +1083,22 @@ export default function FluarPrototype() {
             const row = data.find(r => r.id === parseInt(rowId));
             const colDef = columns.find(c => c.id === colId);
 
-            setTimeout(() => {
-                runGeminiForCell(row, colDef, instruction);
-            }, index * 50);
+            if (row && colDef) {
+                setTimeout(() => {
+                    runGeminiForCell(row, colDef, instruction);
+                }, index * 50);
+            }
         });
     };
 
-    const handleCreateColumn = (name, prompt) => {
+    const handleCreateColumn = (name: string, prompt: string) => {
         const newColId = name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
         const newColDef = { id: newColId, label: name, w: 220, icon: "✨", type: 'enrichable', prompt: prompt };
         setColumns(prev => [...prev, newColDef]);
         setIsAddColOpen(false);
     };
 
-    const handleUpdateColumn = (name, prompt) => {
+    const handleUpdateColumn = (name: string, prompt: string) => {
         if (!editingColumnId) return;
         setColumns(prev => prev.map(col =>
             col.id === editingColumnId
@@ -1057,7 +1109,7 @@ export default function FluarPrototype() {
     };
 
     const handleEnrichSelection = async () => {
-        let cellsToProcess = [];
+        let cellsToProcess: { rowId: number, colDef: Column }[] = [];
         if (selectedCells.size > 0) {
             Array.from(selectedCells).forEach(cellKey => {
                 const [rowId, colId] = cellKey.split(':');
@@ -1070,7 +1122,10 @@ export default function FluarPrototype() {
         cellsToProcess.forEach(item => newProcessing.add(`${item.rowId}:${item.colDef.id}`));
         setProcessingCells(newProcessing);
         cellsToProcess.forEach((item, index) => {
-            setTimeout(() => { runGeminiForCell(data.find(r => r.id === item.rowId), item.colDef); }, index * 50);
+            setTimeout(() => {
+                const row = data.find(r => r.id === item.rowId);
+                if (row) runGeminiForCell(row, item.colDef);
+            }, index * 50);
         });
     };
 
@@ -1082,172 +1137,172 @@ export default function FluarPrototype() {
     }).length;
 
     return (
-        <div className= "flex flex-col h-screen bg-white text-slate-900 font-sans tracking-tight overflow-hidden select-none" >
+        <div className="flex flex-col h-screen bg-white text-slate-900 font-sans tracking-tight overflow-hidden select-none" >
 
-        { isApiKeyModalOpen && <APIKeyModal onClose={ () => setIsApiKeyModalOpen(false) } onSave = { handleSaveApiKey } currentKey = { localApiKey } />}
+            {isApiKeyModalOpen && <APIKeyModal onClose={() => setIsApiKeyModalOpen(false)} onSave={handleSaveApiKey} currentKey={localApiKey} />}
 
-<ChatSidebar 
-        isOpen={ isChatOpen }
-onClose = {() => setIsChatOpen(false)}
-data = { data }
-columns = { columns }
-getCellValueObj = { getCellValueObj }
-apiKey = { localApiKey || apiKey} 
-      />
+            <ChatSidebar
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                data={data}
+                columns={columns}
+                getCellValueObj={getCellValueObj}
+                apiKey={localApiKey || apiKey}
+            />
 
-    < div className = "h-12 border-b border-slate-200 flex items-center justify-between px-3 bg-white z-20 shrink-0" >
-        <div className="flex items-center gap-3" >
-            <div className="w-6 h-6 bg-slate-900 rounded-[4px] flex items-center justify-center text-white font-bold text-xs shadow-sm" > F </div>
-                < div className = "flex items-center gap-2 text-sm text-slate-500" >
-                    <span className="hover:bg-slate-50 px-1.5 rounded cursor-pointer" > Projects </span>
-                        < span className = "text-slate-300" > /</span >
-                            <span className="font-medium text-slate-900 px-1.5 rounded cursor-pointer" > Fluar </span>
+            < div className="h-12 border-b border-slate-200 flex items-center justify-between px-3 bg-white z-20 shrink-0" >
+                <div className="flex items-center gap-3" >
+                    <div className="w-6 h-6 bg-slate-900 rounded-[4px] flex items-center justify-center text-white font-bold text-xs shadow-sm" > F </div>
+                    < div className="flex items-center gap-2 text-sm text-slate-500" >
+                        <span className="hover:bg-slate-50 px-1.5 rounded cursor-pointer" > Projects </span>
+                        < span className="text-slate-300" > /</span >
+                        <span className="font-medium text-slate-900 px-1.5 rounded cursor-pointer" > Fluar </span>
+                    </div>
+                </div>
+                < div className="flex items-center gap-3" >
+                    <button className="text-xs font-medium text-slate-500 hover:text-slate-900 flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-[4px] border border-slate-200" > <Command className="w-3 h-3" /> Search </button>
+                    < div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 border-2 border-white shadow-sm" > </div>
+                </div>
+            </div>
+            < div className="h-12 border-b border-slate-200 flex items-center px-3 gap-2 shrink-0 overflow-x-auto no-scrollbar bg-white" >
+                <ToolbarButton icon={Zap} onClick={() => setIsApiKeyModalOpen(true)} isActive={!!localApiKey}> Connect API </ToolbarButton>
+                < div className="h-4 w-[1px] bg-slate-200 mx-1" > </div>
+                < ToolbarButton icon={Download} > Import CSV </ToolbarButton>
+                < div className="flex-1" > </div>
+                < ToolbarButton icon={MessageSquare} onClick={() => setIsChatOpen(true)} isActive={isChatOpen} > Ask Data </ToolbarButton>
+                < ToolbarButton icon={Share2} > Share </ToolbarButton>
+                < button className="flex items-center gap-1.5 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-[4px] shadow-sm transition-all active:scale-95" >
+                    <Zap className="w-3.5 h-3.5 fill-current" /> AI Agent
+                </button>
+            </div>
+
+            < div className="flex-1 overflow-auto relative bg-slate-50/50" ref={gridRef} >
+                <div className="inline-block min-w-full align-middle" >
+                    <div className="sticky top-0 z-20 bg-white flex border-b border-slate-200 w-max min-w-full shadow-sm" >
+                        <div className="w-10 px-2 py-2 flex items-center justify-center border-r border-slate-200 bg-slate-50/80 backdrop-blur-sm" >
+                            <input type="checkbox" checked={selectedRowIds.size === data.length && data.length > 0} onChange={toggleSelectAllRows} className="rounded-[3px] border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer bg-white" />
+                        </div>
+                        < div className="w-10 px-2 py-2 flex items-center justify-center border-r border-slate-200 bg-slate-50/80 backdrop-blur-sm text-[10px] font-bold text-slate-400" ># </div>
+                        {
+                            columns.map((col) => (
+                                <div key={col.id} style={{ width: col.w }} className={`px-3 py-2 border-r border-slate-200 bg-slate-50/80 backdrop-blur-sm flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 group hover:bg-slate-100 cursor-pointer select-none relative`}>
+                                    {col.icon && <span className="text-[10px] text-slate-400 opacity-70"> {col.icon} </span>}
+                                    {col.label}
+                                    <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1" >
+                                        <button onClick={(e) => { e.stopPropagation(); setEditingColumnId(col.id); }} className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600" title="Settings" > <Settings className="w-3 h-3" /> </button>
+                                        < button onClick={(e) => { e.stopPropagation(); handleDeleteColumn(col.id); }} className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-red-500" title="Delete" > <Trash2 className="w-3 h-3" /> </button>
+                                    </div>
                                 </div>
+                            ))}
+                        <div onClick={() => setIsAddColOpen(!isAddColOpen)} className="relative w-24 px-3 py-2 border-r border-slate-200 bg-slate-50/80 backdrop-blur-sm flex items-center text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer transition-colors" >
+                            + Add
+                            {isAddColOpen && <ColumnSettingsPopover mode="create" onClose={(e) => { e.stopPropagation(); setIsAddColOpen(false); }} onSave={handleCreateColumn} />}
+                        </div>
+                        {
+                            editingColumnId && editingColumnDef && (
+                                <div className="absolute top-12 z-50" style={{ left: "50%" }
+                                }>
+                                    <ColumnSettingsPopover mode="edit" initialName={editingColumnDef.label} initialPrompt={editingColumnDef.prompt || ""} onClose={(e) => { e.stopPropagation(); setEditingColumnId(null); }} onSave={handleUpdateColumn} />
                                 </div>
-                                < div className = "flex items-center gap-3" >
-                                    <button className="text-xs font-medium text-slate-500 hover:text-slate-900 flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-[4px] border border-slate-200" > <Command className="w-3 h-3" /> Search </button>
-                                        < div className = "w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 border-2 border-white shadow-sm" > </div>
-                                            </div>
-                                            </div>
-                                            < div className = "h-12 border-b border-slate-200 flex items-center px-3 gap-2 shrink-0 overflow-x-auto no-scrollbar bg-white" >
-                                                <ToolbarButton icon={ Zap } onClick = {() => setIsApiKeyModalOpen(true)} isActive = {!!localApiKey}> Connect API </ToolbarButton>
-                                                    < div className = "h-4 w-[1px] bg-slate-200 mx-1" > </div>
-                                                        < ToolbarButton icon = { Download } > Import CSV </ToolbarButton>
-                                                            < div className = "flex-1" > </div>
-                                                                < ToolbarButton icon = { MessageSquare } onClick = {() => setIsChatOpen(true)} isActive = { isChatOpen } > Ask Data </ToolbarButton>
-                                                                    < ToolbarButton icon = { Share2 } > Share </ToolbarButton>
-                                                                        < button className = "flex items-center gap-1.5 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-[4px] shadow-sm transition-all active:scale-95" >
-                                                                            <Zap className="w-3.5 h-3.5 fill-current" /> AI Agent
-                                                                                </button>
-                                                                                </div>
+                            )}
+                    </div>
 
-                                                                                < div className = "flex-1 overflow-auto relative bg-slate-50/50" ref = { gridRef } >
-                                                                                    <div className="inline-block min-w-full align-middle" >
-                                                                                        <div className="sticky top-0 z-20 bg-white flex border-b border-slate-200 w-max min-w-full shadow-sm" >
-                                                                                            <div className="w-10 px-2 py-2 flex items-center justify-center border-r border-slate-200 bg-slate-50/80 backdrop-blur-sm" >
-                                                                                                <input type="checkbox" checked = { selectedRowIds.size === data.length && data.length > 0 } onChange = { toggleSelectAllRows } className = "rounded-[3px] border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer bg-white" />
-                                                                                                    </div>
-                                                                                                    < div className = "w-10 px-2 py-2 flex items-center justify-center border-r border-slate-200 bg-slate-50/80 backdrop-blur-sm text-[10px] font-bold text-slate-400" ># </div>
-{
-    columns.map((col) => (
-        <div key= { col.id } style = {{ width: col.w }} className = {`px-3 py-2 border-r border-slate-200 bg-slate-50/80 backdrop-blur-sm flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 group hover:bg-slate-100 cursor-pointer select-none relative`}>
-            { col.icon && <span className="text-[10px] text-slate-400 opacity-70"> { col.icon } </span> }
-{ col.label }
-<div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1" >
-    <button onClick={ (e) => { e.stopPropagation(); setEditingColumnId(col.id); } } className = "p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600" title = "Settings" > <Settings className="w-3 h-3" /> </button>
-        < button onClick = {(e) => { e.stopPropagation(); handleDeleteColumn(col.id); }} className = "p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-red-500" title = "Delete" > <Trash2 className="w-3 h-3" /> </button>
-            </div>
-            </div>
-                ))}
-<div onClick={ () => setIsAddColOpen(!isAddColOpen) } className = "relative w-24 px-3 py-2 border-r border-slate-200 bg-slate-50/80 backdrop-blur-sm flex items-center text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer transition-colors" >
-    + Add
-{ isAddColOpen && <ColumnSettingsPopover mode="create" onClose = {(e) => { e.stopPropagation(); setIsAddColOpen(false); } } onSave = { handleCreateColumn } />}
-</div>
-{
-    editingColumnId && editingColumnDef && (
-        <div className="absolute top-12 z-50" style = {{ left: "50%" }
-}>
-    <ColumnSettingsPopover mode="edit" initialName = { editingColumnDef.label } initialPrompt = { editingColumnDef.prompt || "" } onClose = {(e) => { e.stopPropagation(); setEditingColumnId(null); }} onSave = { handleUpdateColumn } />
-        </div>
-                )}
-</div>
+                    < div className="bg-white w-max min-w-full pb-32" >
+                        {
+                            data.map((row, index) => {
+                                const isRowSelected = selectedRowIds.has(row.id);
+                                return (
+                                    <div key={row.id} className={`flex group ${isRowSelected ? 'bg-indigo-50/40' : ''}`
+                                    }>
+                                        <div className={`w-10 px-2 py-2 flex items-center justify-center border-r border-b border-slate-200 sticky left-0 z-10 transition-colors ${isRowSelected ? 'bg-indigo-50/40' : 'bg-white group-hover:bg-slate-50'}`} >
+                                            <input type="checkbox" checked={isRowSelected} onChange={() => { toggleRowSelect(row.id); }} className="rounded-[3px] border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
+                                        </div>
+                                        < div className={`w-10 px-2 py-2 flex items-center justify-center border-r border-b border-slate-200 text-[10px] text-slate-400 font-mono select-none transition-colors ${isRowSelected ? 'bg-indigo-50/40' : 'bg-white group-hover:bg-slate-50'}`}>
+                                            {index + 1}
+                                        </div>
 
-    < div className = "bg-white w-max min-w-full pb-32" >
-    {
-        data.map((row, index) => {
-            const isRowSelected = selectedRowIds.has(row.id);
-            return (
-                <div key= { row.id } className = {`flex group ${isRowSelected ? 'bg-indigo-50/40' : ''}`
-        }>
-        <div className={`w-10 px-2 py-2 flex items-center justify-center border-r border-b border-slate-200 sticky left-0 z-10 transition-colors ${isRowSelected ? 'bg-indigo-50/40' : 'bg-white group-hover:bg-slate-50'}`} >
-        <input type="checkbox" checked = { isRowSelected } onChange = {(e) => { toggleRowSelect(row.id); }} className = "rounded-[3px] border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
-            </div>
-            < div className = {`w-10 px-2 py-2 flex items-center justify-center border-r border-b border-slate-200 text-[10px] text-slate-400 font-mono select-none transition-colors ${isRowSelected ? 'bg-indigo-50/40' : 'bg-white group-hover:bg-slate-50'}`}>
-                { index + 1}
-</div>
+                                        {
+                                            columns.map((col, colIdx: number) => {
+                                                const cellKey = `${row.id}:${col.id}`;
+                                                const isSelected = selectedCells.has(cellKey);
+                                                const isFillTarget = fillTargetCells.has(cellKey);
+                                                const isLoading = processingCells.has(cellKey);
+                                                const valueObj = getCellValueObj(row.id, col.id);
+                                                const isEditing = !!(editingCell && editingCell.rowId === row.id && editingCell.colId === col.id);
 
-{
-    columns.map((col, colIdx) => {
-        const cellKey = `${row.id}:${col.id}`;
-        const isSelected = selectedCells.has(cellKey);
-        const isFillTarget = fillTargetCells.has(cellKey);
-        const isLoading = processingCells.has(cellKey);
-        const valueObj = getCellValueObj(row.id, col.id);
-        const isEditing = editingCell && editingCell.rowId === row.id && editingCell.colId === col.id;
+                                                let isSelectionTop = false, isSelectionBottom = false, isSelectionLeft = false, isSelectionRight = false;
+                                                if (isSelected) {
+                                                    const topKey = `${data[index - 1]?.id}:${col.id}`;
+                                                    const bottomKey = `${data[index + 1]?.id}:${col.id}`;
+                                                    const leftKey = `${row.id}:${columns[colIdx - 1]?.id}`;
+                                                    const rightKey = `${row.id}:${columns[colIdx + 1]?.id}`;
+                                                    isSelectionTop = !selectedCells.has(topKey);
+                                                    isSelectionBottom = !selectedCells.has(bottomKey);
+                                                    isSelectionLeft = !selectedCells.has(leftKey);
+                                                    isSelectionRight = !selectedCells.has(rightKey);
+                                                }
 
-        let isSelectionTop = false, isSelectionBottom = false, isSelectionLeft = false, isSelectionRight = false;
-        if (isSelected) {
-            const topKey = `${data[index - 1]?.id}:${col.id}`;
-            const bottomKey = `${data[index + 1]?.id}:${col.id}`;
-            const leftKey = `${row.id}:${columns[colIdx - 1]?.id}`;
-            const rightKey = `${row.id}:${columns[colIdx + 1]?.id}`;
-            isSelectionTop = !selectedCells.has(topKey);
-            isSelectionBottom = !selectedCells.has(bottomKey);
-            isSelectionLeft = !selectedCells.has(leftKey);
-            isSelectionRight = !selectedCells.has(rightKey);
-        }
+                                                let content: React.ReactNode = valueObj.value;
+                                                if (col.id === 'name' && !isEditing) content = <div className="flex items-center gap-2 font-medium text-slate-800" > <div className={`w-4 h-4 rounded-[2px] flex items-center justify-center text-[9px] text-white font-bold flex-shrink-0 ${['bg-indigo-500', 'bg-rose-500', 'bg-emerald-500', 'bg-amber-500'][row.id % 4]}`}> {valueObj.value[0]} </div>{valueObj.value}</div>;
+                                                else if (col.id === 'type' && !isEditing) content = <StatusBadge type={valueObj.value} />;
+                                                else if (col.id === 'website' && valueObj.value && !isEditing) content = <span className="text-indigo-600 hover:underline cursor-pointer" > {valueObj.value} </span>;
+                                                else if (!valueObj.value && col.prompt && !isLoading && !isEditing) content = <span className="text-slate-300 text-xs italic" > Ready to generate </span>;
 
-        let content = valueObj.value;
-        if (col.id === 'name' && !isEditing) content = <div className="flex items-center gap-2 font-medium text-slate-800" > <div className={ `w-4 h-4 rounded-[2px] flex items-center justify-center text-[9px] text-white font-bold flex-shrink-0 ${['bg-indigo-500', 'bg-rose-500', 'bg-emerald-500', 'bg-amber-500'][row.id % 4]}` }> { valueObj.value[0] } < /div>{valueObj.value}</div >;
-                                else if (col.id === 'type' && !isEditing) content = <StatusBadge type={ valueObj.value } />;
-                                else if (col.id === 'website' && valueObj.value && !isEditing) content = <span className="text-indigo-600 hover:underline cursor-pointer" > { valueObj.value } </span>;
-                                else if (!valueObj.value && col.prompt && !isLoading && !isEditing) content = <span className="text-slate-300 text-xs italic" > Ready to generate </span>;
-
-        return (
-            <DataCell
-                                        key= { col.id }
-        rowId = { row.id }
-        colId = { col.id }
-        width = { col.w }
-        isSelected = { isSelected }
-        isSelectionTop = { isSelectionTop }
-        isSelectionBottom = { isSelectionBottom }
-        isSelectionLeft = { isSelectionLeft }
-        isSelectionRight = { isSelectionRight }
-        isFillTarget = { isFillTarget }
-        isLoading = { isLoading }
-        onMouseDown = { handleCellMouseDown }
-        onMouseEnter = { handleCellMouseEnter }
-        onDoubleClick = { handleDoubleClick }
-        onHandleMouseDown = { handleFillHandleMouseDown }
-        isEditing = { isEditing }
-        onEdit = { handleCellEdit }
-        valueObj = { valueObj }
-            >
-            { content }
-            </DataCell>
+                                                return (
+                                                    <DataCell
+                                                        key={col.id}
+                                                        rowId={row.id}
+                                                        colId={col.id}
+                                                        width={col.w}
+                                                        isSelected={isSelected}
+                                                        isSelectionTop={isSelectionTop}
+                                                        isSelectionBottom={isSelectionBottom}
+                                                        isSelectionLeft={isSelectionLeft}
+                                                        isSelectionRight={isSelectionRight}
+                                                        isFillTarget={isFillTarget}
+                                                        isLoading={isLoading}
+                                                        onMouseDown={handleCellMouseDown}
+                                                        onMouseEnter={handleCellMouseEnter}
+                                                        onDoubleClick={handleDoubleClick}
+                                                        onHandleMouseDown={handleFillHandleMouseDown}
+                                                        isEditing={isEditing}
+                                                        onEdit={handleCellEdit}
+                                                        valueObj={valueObj}
+                                                    >
+                                                        {content}
+                                                    </DataCell>
+                                                );
+                                            })}
+                                        <div className="w-20 border-b border-r border-slate-200 bg-white group-hover:bg-slate-50" />
+                                    </div>
                                 );
-})}
-<div className="w-20 border-b border-r border-slate-200 bg-white group-hover:bg-slate-50" />
-    </div>
-                    );
-                })}
-<div className="flex border-b border-slate-200 bg-white hover:bg-slate-50 group" >
-    <div className="w-10 border-r border-slate-200 p-2 flex items-center justify-center text-slate-300" > <Plus className="w-4 h-4" /> </div>
-        < div className = "w-full p-2 text-xs text-slate-400 italic cursor-pointer flex items-center gap-2" > <Plus className="w-3 h-3" /> New entry </div>
-            </div>
-            </div>
-            </div>
+                            })}
+                        <div className="flex border-b border-slate-200 bg-white hover:bg-slate-50 group" >
+                            <div className="w-10 border-r border-slate-200 p-2 flex items-center justify-center text-slate-300" > <Plus className="w-4 h-4" /> </div>
+                            < div className="w-full p-2 text-xs text-slate-400 italic cursor-pointer flex items-center gap-2" > <Plus className="w-3 h-3" /> New entry </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-{
-    (selectedCells.size > 0) && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white rounded-[6px] shadow-[0_8px_30px_rgb(0,0,0,0.2)] py-1 px-1 flex items-center gap-1 animate-in slide-in-from-bottom-4 duration-200 z-50 border border-slate-800 ring-1 ring-white/10" >
-            <div className="px-3 py-1.5 text-xs font-medium border-r border-slate-700 flex items-center gap-2 text-slate-300" > <span className="min-w-[18px] h-[18px] rounded-[3px] bg-indigo-500 text-white flex items-center justify-center text-[10px] font-bold shadow-sm" > { selectionCount } < /span>Cells</div >
+            {
+                (selectedCells.size > 0) && (
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white rounded-[6px] shadow-[0_8px_30px_rgb(0,0,0,0.2)] py-1 px-1 flex items-center gap-1 animate-in slide-in-from-bottom-4 duration-200 z-50 border border-slate-800 ring-1 ring-white/10" >
+                        <div className="px-3 py-1.5 text-xs font-medium border-r border-slate-700 flex items-center gap-2 text-slate-300" > <span className="min-w-[18px] h-[18px] rounded-[3px] bg-indigo-500 text-white flex items-center justify-center text-[10px] font-bold shadow-sm" > {selectionCount} </span>Cells</div>
 
-                <button onClick={ () => setIsSmartEditOpen(true) } className = "flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 cursor-pointer hover:shadow-sm rounded-[4px] transition-all group border-r border-slate-700 mr-1" >
-                    <Wand2 className="w-3.5 h-3.5 text-indigo-300 group-hover:text-indigo-100" />
-                        <span className="text-xs font-semibold text-slate-300 group-hover:text-white" > Smart Edit </span>
-                            </button>
+                        <button onClick={() => setIsSmartEditOpen(true)} className="flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 cursor-pointer hover:shadow-sm rounded-[4px] transition-all group border-r border-slate-700 mr-1" >
+                            <Wand2 className="w-3.5 h-3.5 text-indigo-300 group-hover:text-indigo-100" />
+                            <span className="text-xs font-semibold text-slate-300 group-hover:text-white" > Smart Edit </span>
+                        </button>
 
-                            < button onClick = { handleEnrichSelection } disabled = { runnableCount === 0
-} className = {`flex items-center gap-2 px-3 py-1.5 rounded-[4px] transition-all group ${runnableCount === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/10 cursor-pointer hover:shadow-sm'}`}>
-    <div className="relative w-3.5 h-3.5" > <Play className={ `w-3.5 h-3.5 ${runnableCount > 0 ? 'text-indigo-400 fill-indigo-400' : 'text-slate-500 fill-slate-500'}` } /></div > <span className={ `text-xs font-semibold ${runnableCount > 0 ? 'text-indigo-100 group-hover:text-white' : 'text-slate-400'}` }> { runnableCount > 0 ? `Run ${runnableCount} cells` : 'Run Column'}</span>
-        </button>
+                        < button onClick={handleEnrichSelection} disabled={runnableCount === 0
+                        } className={`flex items-center gap-2 px-3 py-1.5 rounded-[4px] transition-all group ${runnableCount === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/10 cursor-pointer hover:shadow-sm'}`}>
+                            <div className="relative w-3.5 h-3.5" > <Play className={`w-3.5 h-3.5 ${runnableCount > 0 ? 'text-indigo-400 fill-indigo-400' : 'text-slate-500 fill-slate-500'}`} /></div> <span className={`text-xs font-semibold ${runnableCount > 0 ? 'text-indigo-100 group-hover:text-white' : 'text-slate-400'}`}> {runnableCount > 0 ? `Run ${runnableCount} cells` : 'Run Column'}</span>
+                        </button>
 
-{ isSmartEditOpen && <SmartEditPopover onClose={ () => setIsSmartEditOpen(false) } onRun = { handleSmartEdit } />}
-</div>
-      )}
-</div>
-  );
+                        {isSmartEditOpen && <SmartEditPopover onClose={() => setIsSmartEditOpen(false)} onRun={handleSmartEdit} />}
+                    </div>
+                )}
+        </div>
+    );
 }
